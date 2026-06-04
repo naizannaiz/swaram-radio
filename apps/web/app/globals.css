@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+:root {
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --amber: #F59E0B;
+  --amber-dim: #92400E;
+  --orange: #F97316;
+  --void: #080808;
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(245, 158, 11, 0.2);
+  --glass-border-active: rgba(245, 158, 11, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  /* Prevent layout shift from scrollbar on desktop */
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: var(--font-display);
+  background: var(--void);
+  color: #fff;
+  /* Prevent overscroll bounce (especially on iOS) */
+  overscroll-behavior: none;
+}
+
+/* Glass panel — glassmorphism */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-active {
+  background: rgba(245, 158, 11, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border-active);
+}
+
+/* On-air pulse ring */
+@keyframes on-air-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); }
+  50%       { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+}
+.on-air-ring {
+  animation: on-air-pulse 1.4s ease-in-out infinite;
+}
+
+/* Canvas waveform glow — applied on the hero container */
+@keyframes hero-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); }
+  50%       { box-shadow: 0 0 40px 4px rgba(245,158,11,0.08); }
+}
+.hero-live {
+  animation: hero-breathe 2.8s ease-in-out infinite;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--amber-dim); border-radius: 2px; }
+
+/* Mono / data text */
+.mono { font-family: var(--font-mono); }
+
+/* border-white/8 utility (not in default Tailwind v4 arbitrary values) */
+.border-white\/8 { border-color: rgba(255,255,255,0.08); }
+
+/* Mobile safe area */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
