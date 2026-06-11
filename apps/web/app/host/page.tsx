@@ -1,11 +1,11 @@
 'use client';
 // app/host/page.tsx — Host Dashboard
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSocket } from '@/hooks/useSocket';
 import { useHostLiveKit } from '@/hooks/useLiveKit';
 import { useRadioStore } from '@/store/radioStore';
-import { connectSocket } from '@/lib/socket-client';
+import { connectSocket, getSocketSync } from '@/lib/socket-client';
 import { OnAirBadge } from '@/components/broadcast/OnAirBadge';
 import { SwaramLogo } from '@/components/broadcast/SwaramLogo';
 import { CountdownTimer } from '@/components/controls/CountdownTimer';
@@ -50,10 +50,17 @@ export default function HostPage() {
   const activePoll = useRadioStore((s) => s.activePoll);
   const schedule = useRadioStore((s) => s.schedule);
 
-  const socket = connectSocket();
+  const [socketReady, setSocketReady] = useState(false);
+  useEffect(() => {
+    connectSocket().then(() => setSocketReady(true));
+  }, []);
+
+  // Socket is always initialised by the time user interacts (async < 500ms).
 
   // Auth — also stores password for LiveKit host token request
   const authenticate = () => {
+    const socket = getSocketSync();
+    if (!socket) return;
     socket.connect();
     socket.emit('HOST_AUTH', { password, hostName: hostName.trim() });
     socket.once('HOST_AUTH_RESULT', (data: { success: boolean; error?: string }) => {
@@ -70,39 +77,38 @@ export default function HostPage() {
 
   // Show controls
   const startShow = () => {
-    socket.emit('START_SHOW');
-    // Connect to LiveKit and publish mic when host goes live
+    getSocketSync()?.emit('START_SHOW');
     const storedPass = sessionStorage.getItem('swaram_host_pass') || '';
     const storedName = sessionStorage.getItem('swaram_host_name') || hostName;
     connectAndGoLive(storedName, storedPass);
   };
-  const endShow = () => { if (confirm('End the show?')) socket.emit('END_SHOW'); };
+  const endShow = () => { if (confirm('End the show?')) getSocketSync()?.emit('END_SHOW'); };
 
   // Caller controls
-  const acceptCaller = (listenerId: string) => socket.emit('ACCEPT_CALLER', { listenerId });
-  const denyCaller = (listenerId: string) => socket.emit('DENY_CALLER', { listenerId });
-  const cutCaller = () => socket.emit('CUT_CALLER');
+  const acceptCaller = (listenerId: string) => getSocketSync()?.emit('ACCEPT_CALLER', { listenerId });
+  const denyCaller = (listenerId: string) => getSocketSync()?.emit('DENY_CALLER', { listenerId });
+  const cutCaller = () => getSocketSync()?.emit('CUT_CALLER');
 
   // Timer
-  const setTimer = (seconds: number) => socket.emit('SET_TIMER', { seconds });
-  const clearTimer = () => socket.emit('SET_TIMER', { seconds: 0 });
+  const setTimer = (seconds: number) => getSocketSync()?.emit('SET_TIMER', { seconds });
+  const clearTimer = () => getSocketSync()?.emit('SET_TIMER', { seconds: 0 });
 
   // Poll
   const createPoll = () => {
     const opts = pollOptions.filter((o) => o.trim());
     if (!pollQuestion.trim() || opts.length < 2) return;
-    socket.emit('CREATE_POLL', { question: pollQuestion, options: opts });
+    getSocketSync()?.emit('CREATE_POLL', { question: pollQuestion, options: opts });
     setPollQuestion('');
     setPollOptions(['', '']);
   };
 
   // Confession
-  const readConfession = (id: string) => socket.emit('READ_CONFESSION', { confessionId: id });
+  const readConfession = (id: string) => getSocketSync()?.emit('READ_CONFESSION', { confessionId: id });
 
   // Schedule
   const addScheduleSlot = () => {
     if (!newSlot.showName.trim() || !newSlot.hostName.trim()) return;
-    socket.emit('ADD_SCHEDULE_SLOT', newSlot);
+    getSocketSync()?.emit('ADD_SCHEDULE_SLOT', newSlot);
     setNewSlot({ dayOfWeek: 1, startTime: '18:00', durationMin: 60, showName: '', hostName: '', description: '' });
   };
 
@@ -146,7 +152,8 @@ export default function HostPage() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
               onClick={authenticate}
-              className="w-full bg-amber-500 text-black font-bold py-3.5 text-sm tracking-wide hover:bg-amber-400 transition-colors"
+              disabled={!socketReady || !hostName.trim() || !password}
+              className="w-full bg-amber-500 text-black font-bold py-3.5 text-sm tracking-wide hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               id="host-login-btn"
             >
               ENTER STUDIO

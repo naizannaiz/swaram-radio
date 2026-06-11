@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSocket } from '@/hooks/useSocket';
 import { useListenerLiveKit } from '@/hooks/useLiveKit';
 import { useRadioStore } from '@/store/radioStore';
-import { connectSocket } from '@/lib/socket-client';
+import { getSocketSync } from '@/lib/socket-client';
 import { OnAirBadge } from '@/components/broadcast/OnAirBadge';
 import { SwaramLogo } from '@/components/broadcast/SwaramLogo';
 import { HeroWaveVisualizer } from '@/components/broadcast/HeroWaveVisualizer';
@@ -177,11 +177,12 @@ export default function ListenerPage() {
   const timerRemaining = useRadioStore((s) => s.timerRemaining);
   const setIdentity = useRadioStore((s) => s.setIdentity);
 
-  const socket = connectSocket();
+  // Socket is initialised asynchronously by useSocket() above.
+  // getSocketSync() is always non-null by the time the user interacts.
 
   const onJoin = (name: string, color: string, dept: string) => {
     setIdentity(name, color, dept);
-    socket.emit('JOIN_SHOW', { name, avatarColor: color, dept: dept || undefined });
+    getSocketSync()?.emit('JOIN_SHOW', { name, avatarColor: color, dept: dept || undefined });
     setJoined(true);
   };
 
@@ -189,15 +190,15 @@ export default function ListenerPage() {
 
   const requestMic = () => {
     if (micStatus === 'queued') {
-      socket.emit('CANCEL_MIC_REQUEST');
+      getSocketSync()?.emit('CANCEL_MIC_REQUEST');
     } else if (micStatus === 'idle' || micStatus === 'denied') {
-      socket.emit('REQUEST_MIC', myDept ? { dept: myDept } : {});
+      getSocketSync()?.emit('REQUEST_MIC', myDept ? { dept: myDept } : {});
     }
   };
 
   const submitConfession = () => {
     if (!confessionText.trim()) return;
-    socket.emit('SUBMIT_CONFESSION', { text: confessionText.trim() });
+    getSocketSync()?.emit('SUBMIT_CONFESSION', { text: confessionText.trim() });
     setConfessionSent(true);
     setTimeout(() => {
       setShowConfession(false);

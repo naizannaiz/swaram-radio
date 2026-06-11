@@ -25,15 +25,30 @@ const httpServer = createServer(app);
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
+// Support comma-separated list of allowed origins (e.g. Vercel URL + localhost)
+const allowedOrigins = FRONTEND_URL.split(',').map((u) => u.trim());
+
+function corsOrigin(
+  origin: string | undefined,
+  callback: (err: Error | null, allow?: boolean) => void
+) {
+  // Allow requests with no origin (curl, mobile apps, same-origin)
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+    return callback(null, true);
+  }
+  callback(new Error('CORS: origin not allowed'));
+}
+
 const io = new Server(httpServer, {
   cors: {
-    origin: FRONTEND_URL,
+    origin: corsOrigin,
     methods: ['GET', 'POST'],
     credentials: true,
   },
 });
 
-app.use(cors({ origin: FRONTEND_URL, credentials: true }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json());
 
 // LiveKit: Listener token — subscribe only, no secret exposed
