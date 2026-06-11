@@ -357,13 +357,6 @@ export default function ListenerPage() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <CountdownTimer />
-          {/* Listener count pill */}
-          {isLive && (
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 border border-white/8">
-              <IconUsers className="w-3 h-3 text-white/40" />
-              <span className="mono text-[10px] text-white/40">{listenerCount}</span>
-            </div>
-          )}
           {/* Volume toggle */}
           <motion.button
             whileTap={{ scale: 0.88 }}
