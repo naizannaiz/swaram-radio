@@ -92,7 +92,7 @@ export function useListenerLiveKit(
         const res = await fetch(
           `${serverUrl}/api/livekit-token?name=${encodeURIComponent(name)}`
         );
-        const { token } = await res.json();
+        const { token, url } = await res.json();
 
         const room = new Room(ROOM_OPTIONS);
         roomRef.current = room;
@@ -104,7 +104,9 @@ export function useListenerLiveKit(
           console.log('[LiveKit] Disconnected from room');
         });
 
-        await room.connect(LIVEKIT_URL, token);
+        const connectUrl = url || LIVEKIT_URL;
+        console.log('[LiveKit] Listener connecting to:', connectUrl);
+        await room.connect(connectUrl, token);
         console.log('[LiveKit] Listener connected ✅');
 
         // Resume AudioContext after user gesture (browser autoplay policy)
@@ -265,6 +267,21 @@ export function useHostLiveKit() {
   const roomRef = useRef<Room | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+
+  // Create dynamic audio element for host to hear remote participants (like callers)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const el = document.createElement('audio');
+      el.id = 'livekit-host-audio-playback';
+      el.autoplay = true;
+      document.body.appendChild(el);
+      audioElRef.current = el;
+    }
+    return () => {
+      audioElRef.current?.remove();
+    };
+  }, []);
 
   // ------------------------------------------------------------------
   // Connect as host and publish mic
@@ -286,7 +303,7 @@ export function useHostLiveKit() {
           return;
         }
 
-        const { token } = await res.json();
+        const { token, url } = await res.json();
         const room = new Room(ROOM_OPTIONS);
         roomRef.current = room;
 
@@ -294,7 +311,28 @@ export function useHostLiveKit() {
           console.log('[LiveKit] Host disconnected');
         });
 
-        await room.connect(LIVEKIT_URL, token);
+        // Handle remote tracks (e.g. caller audio) so the host can hear them
+        room.on(RoomEvent.TrackSubscribed, (track) => {
+          if (track.kind === Track.Kind.Audio) {
+            console.log('[LiveKit] Host subscribed to remote audio track:', track.sid);
+            if (audioElRef.current) {
+              track.attach(audioElRef.current);
+            }
+          }
+        });
+
+        room.on(RoomEvent.TrackUnsubscribed, (track) => {
+          if (track.kind === Track.Kind.Audio) {
+            console.log('[LiveKit] Host unsubscribed from remote audio track:', track.sid);
+            if (audioElRef.current) {
+              track.detach(audioElRef.current);
+            }
+          }
+        });
+
+        const connectUrl = url || LIVEKIT_URL;
+        console.log('[LiveKit] Host connecting to:', connectUrl);
+        await room.connect(connectUrl, token);
 
         // Publish mic immediately
         await room.localParticipant.setMicrophoneEnabled(true);
