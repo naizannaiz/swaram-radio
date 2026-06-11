@@ -9,7 +9,7 @@ import { useRadioStore } from '@/store/radioStore';
 import { getSocketSync } from '@/lib/socket-client';
 import { OnAirBadge } from '@/components/broadcast/OnAirBadge';
 import { SwaramLogo } from '@/components/broadcast/SwaramLogo';
-import { HeroWaveVisualizer } from '@/components/broadcast/HeroWaveVisualizer';
+import { CircularVisualizer } from '@/components/broadcast/CircularVisualizer';
 import { ReactionBar } from '@/components/reactions/ReactionBar';
 import { ReactionLayer } from '@/components/reactions/ReactionLayer';
 import { PollWidget } from '@/components/polls/PollWidget';
@@ -176,6 +176,15 @@ export default function ListenerPage() {
   const activeCaller = useRadioStore((s) => s.activeCaller);
   const timerRemaining = useRadioStore((s) => s.timerRemaining);
   const setIdentity = useRadioStore((s) => s.setIdentity);
+  const isAudioMuted = useRadioStore((s) => s.isAudioMuted);
+  const setAudioMuted = useRadioStore((s) => s.setAudioMuted);
+
+  // Sync audio element mute state
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = isAudioMuted;
+    }
+  }, [isAudioMuted]);
 
   // Socket is initialised asynchronously by useSocket() above.
   // getSocketSync() is always non-null by the time the user interacts.
@@ -307,38 +316,28 @@ export default function ListenerPage() {
           )}
         </AnimatePresence>
 
-        {/* ── HERO WAVEFORM ── */}
-        <div
-          className={`w-full relative transition-all duration-700 ${
-            isLive
-              ? 'border border-amber-500/20 bg-amber-500/[0.03]'
-              : 'border border-white/5 bg-white/[0.02]'
-          }`}
-          style={{ height: '200px' }}
-        >
-          {/* Corner labels */}
+        {/* ── HERO CIRCULAR VISUALIZER ── */}
+        <div className="relative flex flex-col items-center py-4">
+          {/* Listener count badge */}
           {isLive && (
-            <>
-              <span className="absolute top-2 left-3 mono text-[9px] text-amber-400/50 tracking-widest z-10">
-                ● LIVE
-              </span>
-              <span className="absolute top-2 right-3 mono text-[9px] text-white/20 z-10">
-                {listenerCount} listening
-              </span>
-            </>
+            <div className="absolute top-0 right-0 mono text-[9px] text-white/25 z-10">
+              {listenerCount} listening
+            </div>
           )}
 
-          <HeroWaveVisualizer analyserNode={analyserRef} />
+          <CircularVisualizer analyserNode={analyserRef} size={280} />
 
-          {/* Center line */}
-          <div
-            className="absolute inset-x-4 top-1/2 -translate-y-px h-px pointer-events-none"
-            style={{
-              background: isLive
-                ? 'linear-gradient(to right, transparent, rgba(245,158,11,0.3), transparent)'
-                : 'linear-gradient(to right, transparent, rgba(255,255,255,0.05), transparent)',
-            }}
-          />
+          {/* Live pulse label below circle */}
+          {isLive && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-3 flex items-center gap-1.5"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="mono text-[10px] text-amber-400/70 tracking-widest uppercase">Live</span>
+            </motion.div>
+          )}
         </div>
 
         {/* ── Caller card (inline, appears below waveform) ── */}
@@ -389,29 +388,129 @@ export default function ListenerPage() {
         {/* Poll widget — shows only when active */}
         <PollWidget />
 
-        {/* Mic request CTA */}
+        {/* Mic request CTA — Cautious / Responsible Design */}
         {isLive && (
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={requestMic}
-            disabled={micStatus === 'accepted'}
-            id="mic-request-btn"
-            className={`w-full py-4 font-bold text-sm tracking-wide transition-all ${
-              micStatus === 'accepted'
-                ? 'bg-amber-500 text-black'
-                : micStatus === 'queued'
-                ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30'
-                : 'glass text-white hover:border-amber-500/30 active:bg-white/5'
-            }`}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full"
           >
-            {micStatus === 'accepted'
-              ? '🎙️  You\'re On Air!'
-              : micStatus === 'queued'
-              ? '⏳  In Queue — Tap to Cancel'
-              : micStatus === 'denied'
-              ? '🎙️  Request Declined — Try Again'
-              : '🎙️  Request to Speak'}
-          </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={requestMic}
+              disabled={micStatus === 'accepted'}
+              id="mic-request-btn"
+              className={`w-full relative overflow-hidden transition-all ${
+                micStatus === 'accepted'
+                  ? 'bg-emerald-500/15 border border-emerald-500/40'
+                  : micStatus === 'queued'
+                  ? 'bg-orange-500/10 border border-orange-500/35'
+                  : micStatus === 'denied'
+                  ? 'bg-red-500/10 border border-red-500/35'
+                  : 'bg-amber-950/40 border border-amber-500/25 hover:border-amber-500/50 hover:bg-amber-950/60'
+              }`}
+            >
+              {/* Animated pulse ring when queued */}
+              {micStatus === 'queued' && (
+                <motion.div
+                  animate={{ scale: [1, 1.04, 1], opacity: [0.4, 0.7, 0.4] }}
+                  transition={{ duration: 1.6, repeat: Infinity }}
+                  className="absolute inset-0 border border-orange-400/30 pointer-events-none"
+                />
+              )}
+
+              <div className="px-5 py-4 flex items-center gap-4">
+                {/* Status icon */}
+                <div
+                  className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-lg ${
+                    micStatus === 'accepted'
+                      ? 'bg-emerald-500/20'
+                      : micStatus === 'queued'
+                      ? 'bg-orange-500/20'
+                      : micStatus === 'denied'
+                      ? 'bg-red-500/20'
+                      : 'bg-amber-500/15'
+                  }`}
+                >
+                  {micStatus === 'accepted' ? '🔴' :
+                   micStatus === 'queued' ? (
+                    <motion.span
+                      animate={{ opacity: [1, 0.4, 1] }}
+                      transition={{ duration: 1, repeat: Infinity }}
+                    >⏳</motion.span>
+                   ) :
+                   micStatus === 'denied' ? '🚫' : '⚠️'}
+                </div>
+
+                {/* Text block */}
+                <div className="flex-1 text-left">
+                  <p
+                    className={`font-bold text-sm ${
+                      micStatus === 'accepted' ? 'text-emerald-400' :
+                      micStatus === 'queued' ? 'text-orange-400' :
+                      micStatus === 'denied' ? 'text-red-400' :
+                      'text-amber-300'
+                    }`}
+                  >
+                    {micStatus === 'accepted'
+                      ? 'You\'re On Air'
+                      : micStatus === 'queued'
+                      ? 'Waiting in Queue — Tap to Cancel'
+                      : micStatus === 'denied'
+                      ? 'Request Declined — Try Again'
+                      : 'Request to Speak'}
+                  </p>
+                  <p className="mono text-[10px] text-white/30 mt-0.5">
+                    {micStatus === 'accepted'
+                      ? 'Your mic is live to all listeners'
+                      : micStatus === 'queued'
+                      ? 'Host will accept or decline'
+                      : micStatus === 'denied'
+                      ? 'Host declined your request'
+                      : 'Mic access required · Goes live immediately'}
+                  </p>
+                </div>
+
+                {/* Chevron / arrow */}
+                {(micStatus === 'idle' || micStatus === 'denied') && (
+                  <svg className="w-4 h-4 text-amber-500/60 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
+              </div>
+            </motion.button>
+
+            {/* Disclaimer strip */}
+            {(micStatus === 'idle' || micStatus === 'denied') && (
+              <p className="mt-1.5 mono text-[9px] text-white/20 text-center tracking-wide">
+                ⚠ Your voice will be broadcast to all listeners
+              </p>
+            )}
+          </motion.div>
+        )}
+
+        {/* ── Audio mute/unmute control bar ── */}
+        {joined && (
+          <div className="flex items-center justify-center gap-3">
+            <motion.button
+              whileTap={{ scale: 0.92 }}
+              onClick={() => setAudioMuted(!isAudioMuted)}
+              id="listener-mute-btn"
+              className={`flex items-center gap-2.5 px-5 py-2.5 border transition-all ${
+                isAudioMuted
+                  ? 'bg-red-500/15 border-red-500/40 text-red-400'
+                  : 'glass border-white/10 text-white/60 hover:text-white/90 hover:border-white/25'
+              }`}
+              title={isAudioMuted ? 'Unmute audio' : 'Mute audio'}
+            >
+              <span className="text-base leading-none">
+                {isAudioMuted ? '🔇' : '🔊'}
+              </span>
+              <span className="text-xs font-medium">
+                {isAudioMuted ? 'Muted' : 'Listening'}
+              </span>
+            </motion.button>
+          </div>
         )}
 
         {/* Confession */}

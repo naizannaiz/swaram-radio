@@ -89,6 +89,10 @@ interface RadioState {
   // Host queue (host only)
   micQueue: MicRequest[];
 
+  // Mute state
+  isMicMuted: boolean;      // host: disables mic track (true mute)
+  isAudioMuted: boolean;    // listener: silences audio output
+
   // Setters
   setIdentity: (name: string, color: string, dept?: string) => void;
   setRole: (role: RadioState['myRole']) => void;
@@ -110,6 +114,8 @@ interface RadioState {
   setMicQueue: (q: MicRequest[]) => void;
   addMicRequest: (r: MicRequest) => void;
   removeMicRequest: (listenerId: string) => void;
+  setMicMuted: (v: boolean) => void;
+  setAudioMuted: (v: boolean) => void;
 }
 
 export const useRadioStore = create<RadioState>((set) => ({
@@ -135,6 +141,9 @@ export const useRadioStore = create<RadioState>((set) => ({
   schedule: [],
   timerRemaining: 0,
   micQueue: [],
+
+  isMicMuted: false,
+  isAudioMuted: false,
 
   setIdentity: (name, color, dept = '') => set({ myName: name, myAvatarColor: color, myDept: dept }),
   setRole: (role) => set({ myRole: role }),
@@ -172,4 +181,6 @@ export const useRadioStore = create<RadioState>((set) => ({
     set((state) => ({
       micQueue: state.micQueue.filter((r) => r.listenerId !== listenerId),
     })),
+  setMicMuted: (v) => set({ isMicMuted: v }),
+  setAudioMuted: (v) => set({ isAudioMuted: v }),
 }));

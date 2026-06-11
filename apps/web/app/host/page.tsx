@@ -8,6 +8,7 @@ import { useRadioStore } from '@/store/radioStore';
 import { connectSocket, getSocketSync } from '@/lib/socket-client';
 import { OnAirBadge } from '@/components/broadcast/OnAirBadge';
 import { SwaramLogo } from '@/components/broadcast/SwaramLogo';
+import { CircularVisualizer } from '@/components/broadcast/CircularVisualizer';
 import { CountdownTimer } from '@/components/controls/CountdownTimer';
 import { CallerIDCard } from '@/components/broadcast/CallerIDCard';
 import { ConfessionOverlay } from '@/components/confessions/ConfessionOverlay';
@@ -29,7 +30,7 @@ export default function HostPage() {
   const [authError, setAuthError] = useState('');
 
   useSocket();
-  const { connectAndGoLive } = useHostLiveKit();
+  const { connectAndGoLive, analyserRef, toggleMicMute } = useHostLiveKit();
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
 
@@ -49,6 +50,7 @@ export default function HostPage() {
   const unreadConfessions = confessions.filter((c) => !c.readAt);
   const activePoll = useRadioStore((s) => s.activePoll);
   const schedule = useRadioStore((s) => s.schedule);
+  const isMicMuted = useRadioStore((s) => s.isMicMuted);
 
   const [socketReady, setSocketReady] = useState(false);
   useEffect(() => {
@@ -167,11 +169,22 @@ export default function HostPage() {
   return (
     <main className="min-h-screen bg-[#080808] flex flex-col">
       {/* Top bar */}
-      <header className="border-b border-white/5 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <header className="border-b border-white/5 px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
           <SwaramLogo size="sm" />
           <h1 className="text-xl font-bold text-white">Swaram Studio</h1>
           <OnAirBadge />
+          {/* Mini host mic visualizer — shows when live */}
+          {isLive && (
+            <div className="ml-1 flex items-center gap-2">
+              <CircularVisualizer analyserNode={analyserRef} size={40} compact />
+              <span className={`mono text-[10px] tracking-wide ${
+                isMicMuted ? 'text-red-400' : 'text-amber-400/60'
+              }`}>
+                {isMicMuted ? 'MUTED' : 'LIVE MIC'}
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <CountdownTimer />
@@ -467,6 +480,144 @@ export default function HostPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Google Meet-style bottom call toolbar ── */}
+      {isLive && (
+        <div className="border-t border-white/5 bg-[#080808] px-6 py-3 flex items-center justify-center gap-3">
+
+          {/* Live status pill */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 mr-2">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="mono text-[10px] text-red-400 tracking-widest">ON AIR</span>
+          </div>
+
+          {/* Mute Mic */}
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={toggleMicMute}
+            id="host-mute-btn"
+            title={isMicMuted ? 'Unmute Mic' : 'Mute Mic'}
+            className={`group relative flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl border transition-all ${
+              isMicMuted
+                ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              {isMicMuted ? (
+                <>
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                  <path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6" />
+                  <path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </>
+              ) : (
+                <>
+                  <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                  <path d="M19 10v2a7 7 0 01-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </>
+              )}
+            </svg>
+            <span className="text-[10px] mono">{isMicMuted ? 'Unmute' : 'Mute'}</span>
+          </motion.button>
+
+          {/* Cut Caller */}
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={cutCaller}
+            id="cut-caller-toolbar-btn"
+            title="Cut Current Caller"
+            className="group flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl border bg-white/5 border-white/10 text-white/70 hover:bg-orange-500/15 hover:border-orange-500/30 hover:text-orange-400 transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span className="text-[10px] mono">Cut</span>
+          </motion.button>
+
+          {/* Timer quick-set */}
+          <div className="relative group">
+            <button
+              className="flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl border bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-all"
+              title="Set Timer"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span className="text-[10px] mono">Timer</span>
+            </button>
+            {/* Dropdown on hover */}
+            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col gap-1 bg-[#111] border border-white/10 p-2 rounded-xl shadow-2xl z-50">
+              {TIMER_PRESETS.map((p) => (
+                <button
+                  key={p.seconds}
+                  onClick={() => setTimer(p.seconds)}
+                  className="px-4 py-1.5 text-xs text-white/70 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors whitespace-nowrap"
+                  id={`timer-${p.seconds}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+              <button
+                onClick={clearTimer}
+                className="px-4 py-1.5 text-xs text-white/30 hover:text-white/60 rounded-lg transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {/* Raise Hand / Queue count badge */}
+          <div className="flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl border bg-white/5 border-white/10 text-white/50">
+            <div className="relative">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3" />
+              </svg>
+              {micQueue.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-black text-[9px] font-bold flex items-center justify-center">
+                  {micQueue.length}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] mono">Queue</span>
+          </div>
+
+          {/* Confessions badge */}
+          <div className="flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl border bg-white/5 border-white/10 text-white/50">
+            <div className="relative">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              {unreadConfessions.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                  {unreadConfessions.length}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] mono">DMs</span>
+          </div>
+
+          <div className="w-px h-8 bg-white/8 mx-1" />
+
+          {/* End Show */}
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={endShow}
+            id="end-show-toolbar-btn"
+            title="End Show"
+            className="flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl border bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+            <span className="text-[10px] mono">End</span>
+          </motion.button>
+        </div>
+      )}
 
       {/* Overlays */}
       <CallerIDCard />

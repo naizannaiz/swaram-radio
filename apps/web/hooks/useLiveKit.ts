@@ -372,6 +372,27 @@ export function useHostLiveKit() {
     audioCtxRef.current = null;
   }, []);
 
+  // ------------------------------------------------------------------
+  // Toggle mic mute — truly disables the MediaStreamTrack (Option A)
+  // ------------------------------------------------------------------
+  const toggleMicMute = useCallback(() => {
+    const room = roomRef.current;
+    if (!room) return;
+
+    const isMicMuted = useRadioStore.getState().isMicMuted;
+    const setMicMuted = useRadioStore.getState().setMicMuted;
+    const newMuted = !isMicMuted;
+
+    // Disable/enable the actual mic track so no audio is sent
+    room.localParticipant.trackPublications.forEach((pub) => {
+      if (pub.kind === Track.Kind.Audio && pub.track) {
+        pub.track.mediaStreamTrack.enabled = !newMuted;
+      }
+    });
+
+    setMicMuted(newMuted);
+  }, []);
+
   // Socket wiring
   useEffect(() => {
     const socket = getSocket();
@@ -382,5 +403,5 @@ export function useHostLiveKit() {
     };
   }, [disconnect]);
 
-  return { connectAndGoLive, disconnect, analyserRef };
+  return { connectAndGoLive, disconnect, analyserRef, toggleMicMute };
 }
