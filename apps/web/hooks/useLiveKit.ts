@@ -46,21 +46,41 @@ export function useListenerLiveKit(
   const roomRef = useRef<Room | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   const myName = useRadioStore((s) => s.myName);
   const micRequestStatus = useRadioStore((s) => s.micRequestStatus);
+  const isAudioMuted = useRadioStore((s) => s.isAudioMuted);
+
+  // Sync muted state to all dynamic audio elements
+  useEffect(() => {
+    audioElementsRef.current.forEach((el) => {
+      el.muted = isAudioMuted;
+    });
+  }, [isAudioMuted]);
+
+  // Clean up all dynamically created audio elements
+  const cleanupTracks = useCallback(() => {
+    audioElementsRef.current.forEach((el) => {
+      el.remove();
+    });
+    audioElementsRef.current.clear();
+  }, []);
 
   // ------------------------------------------------------------------
-  // Attach incoming audio track to <audio> element + Web Audio analyser
+  // Attach incoming audio track to dynamic <audio> element + Web Audio analyser
   // ------------------------------------------------------------------
   const attachTrack = useCallback(
     (track: RemoteTrack) => {
       if (track.kind !== Track.Kind.Audio) return;
 
-      // Wire to hidden <audio> element for playback
-      if (audioRef.current) {
-        track.attach(audioRef.current);
-      }
+      const key = track.sid || track.mediaStreamTrack.id;
+      if (audioElementsRef.current.has(key)) return;
+
+      // Let LiveKit create and play a dynamic audio element for this track
+      const el = track.attach();
+      el.muted = useRadioStore.getState().isAudioMuted;
+      audioElementsRef.current.set(key, el);
 
       // Wire to Web Audio analyser for waveform visualizer
       const mediaStream = new MediaStream([track.mediaStreamTrack]);
@@ -73,11 +93,26 @@ export function useListenerLiveKit(
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
         analyserRef.current = analyser;
-        analyser.connect(ctx.destination);
+        // Do NOT connect to ctx.destination to avoid double playback/echo.
+        // Playback is handled independently by the elements created via track.attach().
       }
       source.connect(analyserRef.current);
     },
-    [audioRef]
+    []
+  );
+
+  const detachTrack = useCallback(
+    (track: RemoteTrack) => {
+      if (track.kind !== Track.Kind.Audio) return;
+      const key = track.sid || track.mediaStreamTrack.id;
+      const el = audioElementsRef.current.get(key);
+      if (el) {
+        track.detach(el);
+        el.remove();
+        audioElementsRef.current.delete(key);
+      }
+    },
+    []
   );
 
   // ------------------------------------------------------------------
@@ -99,9 +134,11 @@ export function useListenerLiveKit(
 
         // Handle incoming audio tracks
         room.on(RoomEvent.TrackSubscribed, (track) => attachTrack(track));
+        room.on(RoomEvent.TrackUnsubscribed, (track) => detachTrack(track));
 
         room.on(RoomEvent.Disconnected, () => {
           console.log('[LiveKit] Disconnected from room');
+          cleanupTracks();
         });
 
         const connectUrl = url || LIVEKIT_URL;
@@ -118,7 +155,7 @@ export function useListenerLiveKit(
         room.remoteParticipants.forEach((participant) => {
           participant.trackPublications.forEach((pub) => {
             if (pub.isSubscribed && pub.track) {
-              attachTrack(pub.track);
+              attachTrack(pub.track as RemoteTrack);
             }
           });
         });
@@ -126,7 +163,7 @@ export function useListenerLiveKit(
         console.error('[LiveKit] Listener connect failed:', err);
       }
     },
-    [attachTrack]
+    [attachTrack, detachTrack, cleanupTracks]
   );
 
   // ------------------------------------------------------------------
@@ -152,11 +189,13 @@ export function useListenerLiveKit(
 
         // We need to reconnect with the new token to gain publish permissions
         await room.disconnect();
+        cleanupTracks();
 
         const newRoom = new Room(ROOM_OPTIONS);
         roomRef.current = newRoom;
 
         newRoom.on(RoomEvent.TrackSubscribed, (track) => attachTrack(track));
+        newRoom.on(RoomEvent.TrackUnsubscribed, (track) => detachTrack(track));
 
         await newRoom.connect(data.livekitUrl || LIVEKIT_URL, data.livekitToken);
 
@@ -168,7 +207,7 @@ export function useListenerLiveKit(
         console.error('[LiveKit] Caller upgrade failed:', err);
       }
     },
-    [attachTrack]
+    [attachTrack, detachTrack, cleanupTracks]
   );
 
   // ------------------------------------------------------------------
@@ -230,6 +269,7 @@ export function useListenerLiveKit(
     socket.on('SHOW_ENDED', async () => {
       await roomRef.current?.disconnect();
       roomRef.current = null;
+      cleanupTracks();
       if (audioRef.current) {
         audioRef.current.srcObject = null;
         audioRef.current.pause();
@@ -244,7 +284,7 @@ export function useListenerLiveKit(
       socket.off('CALLER_DONE', downgradeToListener);
       socket.off('SHOW_ENDED');
     };
-  }, [myName, connectAsListener, upgradeToCallerAndPublish, downgradeToListener, audioRef]);
+  }, [myName, connectAsListener, upgradeToCallerAndPublish, downgradeToListener, cleanupTracks, audioRef]);
 
   // Connect immediately if already live when hook mounts (e.g. mid-show join)
   useEffect(() => {
@@ -253,9 +293,10 @@ export function useListenerLiveKit(
     }
     return () => {
       roomRef.current?.disconnect();
+      cleanupTracks();
       audioCtxRef.current?.close();
     };
-  }, [myName, connectAsListener]);
+  }, [myName, connectAsListener, cleanupTracks]);
 
   return analyserRef;
 }
