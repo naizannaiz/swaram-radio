@@ -1,9 +1,11 @@
-// lib/webrtc.ts
+import { getServerUrlAsync } from './socket-client';
+
 // WebRTC helpers — fetch ICE servers from backend (TURN creds never in frontend bundle)
 export async function getIceServers(): Promise<RTCIceServer[]> {
   try {
+    const serverUrl = await getServerUrlAsync();
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_SERVER_URL}/api/ice-servers`
+      `${serverUrl}/api/ice-servers`
     );
     const data = await res.json();
     return data.iceServers;

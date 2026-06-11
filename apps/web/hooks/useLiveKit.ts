@@ -14,10 +14,9 @@ import {
   RoomOptions,
   AudioPresets,
 } from 'livekit-client';
-import { getSocket } from '@/lib/socket-client';
+import { getSocket, getServerUrlAsync } from '@/lib/socket-client';
 import { useRadioStore } from '@/store/radioStore';
 
-const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001';
 const LIVEKIT_URL =
   process.env.NEXT_PUBLIC_LIVEKIT_URL || 'wss://swaram-c1q3n09b.livekit.cloud';
 
@@ -89,8 +88,9 @@ export function useListenerLiveKit(
       if (roomRef.current?.state === 'connected') return;
 
       try {
+        const serverUrl = await getServerUrlAsync();
         const res = await fetch(
-          `${SERVER_URL}/api/livekit-token?name=${encodeURIComponent(name)}`
+          `${serverUrl}/api/livekit-token?name=${encodeURIComponent(name)}`
         );
         const { token } = await res.json();
 
@@ -274,7 +274,8 @@ export function useHostLiveKit() {
       if (roomRef.current?.state === 'connected') return;
 
       try {
-        const res = await fetch(`${SERVER_URL}/api/livekit-host-token`, {
+        const serverUrl = await getServerUrlAsync();
+        const res = await fetch(`${serverUrl}/api/livekit-host-token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password, hostName }),
