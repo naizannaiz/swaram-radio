@@ -32,8 +32,11 @@ export function registerCallerHandlers(
     if (room.hostSocketId) io.to(room.hostSocketId).emit('MIC_REQUEST_ADDED', request);
     if (room.cohostSocketId) io.to(room.cohostSocketId).emit('MIC_REQUEST_ADDED', request);
 
-    // Confirm to requester
-    socket.emit('MIC_REQUEST_STATUS', { status: 'queued' });
+    // Broadcast queue length to all listeners
+    io.emit('QUEUE_UPDATED', { count: room.micQueue.length });
+
+    // Confirm to requester with their position
+    socket.emit('MIC_REQUEST_STATUS', { status: 'queued', position: room.micQueue.length });
   });
 
   // Cancel request
@@ -44,6 +47,9 @@ export function registerCallerHandlers(
       io.to(room.hostSocketId).emit('MIC_REQUEST_REMOVED', { listenerId: socket.id });
     if (room.cohostSocketId)
       io.to(room.cohostSocketId).emit('MIC_REQUEST_REMOVED', { listenerId: socket.id });
+
+    // Broadcast updated count to all
+    io.emit('QUEUE_UPDATED', { count: room.micQueue.length });
 
     socket.emit('MIC_REQUEST_STATUS', { status: 'cancelled' });
   });
@@ -89,6 +95,9 @@ export function registerCallerHandlers(
       dept: request.dept,
       avatarColor: request.avatarColor,
     });
+
+    // Broadcast updated queue count to all
+    io.emit('QUEUE_UPDATED', { count: room.micQueue.length });
   });
 
   // Host denies caller
@@ -102,6 +111,9 @@ export function registerCallerHandlers(
       io.to(room.hostSocketId).emit('MIC_REQUEST_REMOVED', { listenerId: data.listenerId });
     if (room.cohostSocketId)
       io.to(room.cohostSocketId).emit('MIC_REQUEST_REMOVED', { listenerId: data.listenerId });
+
+    // Broadcast updated queue count
+    io.emit('QUEUE_UPDATED', { count: room.micQueue.length });
   });
 
   // Host cuts active caller

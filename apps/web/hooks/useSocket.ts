@@ -39,6 +39,7 @@ export function useSocket() {
         store.setActivePoll(null);
         store.setTimerRemaining(0);
         store.setMicRequestStatus('idle');
+        store.setMicQueueCount(0);
       });
 
       socket.on('LISTENER_COUNT', (data) => store.setListenerCount(data.count));
@@ -66,6 +67,8 @@ export function useSocket() {
       socket.on('TIMER_ENDED', () => store.setTimerRemaining(0));
 
       socket.on('SCHEDULE_UPDATED', (data) => store.setSchedule(data.schedule));
+
+      socket.on('QUEUE_UPDATED', (data: { count: number }) => store.setMicQueueCount(data.count));
 
       socket.on('MIC_REQUEST_ADDED', (data) => store.addMicRequest(data));
       socket.on('MIC_REQUEST_REMOVED', (data) => store.removeMicRequest(data.listenerId));
