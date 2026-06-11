@@ -32,12 +32,27 @@ function corsOrigin(
   origin: string | undefined,
   callback: (err: Error | null, allow?: boolean) => void
 ) {
-  // Allow requests with no origin (curl, mobile apps, same-origin)
   if (!origin) return callback(null, true);
+
+  // Allow any localhost/127.0.0.1 connection for local testing
+  if (
+    origin.match(/^https?:\/\/localhost(:\d+)?$/) ||
+    origin.match(/^https?:\/\/127\.0\.0\.1(:\d+)?$/)
+  ) {
+    return callback(null, true);
+  }
+
+  // Allow any Vercel deployment of the app
+  if (origin.endsWith('.vercel.app')) {
+    return callback(null, true);
+  }
+
   if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
     return callback(null, true);
   }
-  callback(new Error('CORS: origin not allowed'));
+
+  console.warn(`[CORS Blocked] Origin: ${origin}`);
+  callback(new Error(`CORS: origin ${origin} not allowed`));
 }
 
 const io = new Server(httpServer, {
